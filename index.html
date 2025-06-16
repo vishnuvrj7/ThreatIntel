@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threat Intelligence Aggregator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 0, 0, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            color: #ff6b6b;
+            font-size: 1.8rem;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.3);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 107, 107, 0.3);
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.1);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            color: #ff6b6b;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ecdc4;
+            box-shadow: 0 0 10px rgba(78, 205, 196, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .source-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 3px solid #4ecdc4;
+        }
+
+        .source-name {
+            font-weight: 600;
+            color: #4ecdc4;
+            margin-bottom: 0.5rem;
+        }
+
+        .source-stats {
+            font-size: 0.9rem;
+            color: #b0b0b0;
+        }
+
+        .threat-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        .threat-item {
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 0.5rem;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 3px solid;
+            transition: all 0.3s ease;
+        }
+
+        .threat-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .threat-critical { border-left-color: #ff4757; }
+        .threat-high { border-left-color: #ff7675; }
+        .threat-medium { border-left-color: #fdcb6e; }
+        .threat-low { border-left-color: #6c5ce7; }
+
+        .threat-title {
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+
+        .threat-meta {
+            font-size: 0.8rem;
+            color: #b0b0b0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .correlation-matrix {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .correlation-cell {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.8rem;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .correlation-cell:hover {
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .correlation-high { background: rgba(255, 71, 87, 0.3); }
+        .correlation-medium { background: rgba(253, 203, 110, 0.3); }
+        .correlation-low { background: rgba(108, 92, 231, 0.3); }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, #4ecdc4, #6ed7d1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4ecdc4;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #b0b0b0;
+            margin-top: 0.5rem;
+        }
+
+        .alert-banner {
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.2), rgba(255, 107, 107, 0.1));
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            animation: alertPulse 3s infinite;
+        }
+
+        @keyframes alertPulse {
+            0%, 100% { border-color: rgba(255, 71, 87, 0.3); }
+            50% { border-color: rgba(255, 71, 87, 0.6); }
+        }
+
+        .timeline {
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-left: 2rem;
+            margin-bottom: 1rem;
+            border-left: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 0;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ecdc4;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ Threat Intelligence Aggregator</h1>
+    </div>
+
+    <div class="dashboard">
+        <!-- Data Sources Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Data Sources</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="source-grid">
+                <div class="source-item">
+                    <div class="source-name">MISP</div>
+                    <div class="source-stats">Active • 1.2K IOCs</div>
+                </div>
+                <div class="source-item">
+                    <div class="source-name">VirusTotal</div>
+                    <div class="source-stats">Active • 856 samples</div>
+                </div>
+                <div class="source-item">
+                    <div class="source-name">AlienVault OTX</div>
+                    <div class="source-stats">Active • 2.1K indicators</div>
+                </div>
+                <div class="source-item">
+                    <div class="source-name">Shodan</div>
+                    <div class="source-stats">Active • 342 assets</div>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn" onclick="refreshSources()">Refresh All</button>
+                <button class="btn secondary" onclick="addSource()">Add Source</button>
+            </div>
+        </div>
+
+        <!-- Live Threats Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Live Threats</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="alert-banner">
+                <strong>⚠️ High Priority Alert:</strong> New APT campaign detected targeting financial sector
+            </div>
+            <div class="threat-list" id="threatList">
+                <!-- Threats will be populated by JavaScript -->
+            </div>
+            <div class="controls">
+                <button class="btn" onclick="refreshThreats()">Refresh</button>
+                <button class="btn secondary" onclick="exportThreats()">Export</button>
+            </div>
+        </div>
+
+        <!-- Correlation Engine Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Correlation Engine</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="correlation-matrix" id="correlationMatrix">
+                <!-- Matrix will be populated by JavaScript -->
+            </div>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <strong>14:32</strong> - IP correlation found: 3 sources
+                </div>
+                <div class="timeline-item">
+                    <strong>14:28</strong> - Hash match across 2 feeds
+                </div>
+                <div class="timeline-item">
+                    <strong>14:15</strong> - Domain pattern detected
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn" onclick="runCorrelation()">Run Analysis</button>
+                <button class="btn secondary" onclick="viewCorrelations()">View Details</button>
+            </div>
+        </div>
+
+        <!-- Statistics Dashboard -->
+        <div class="card full-width">
+            <div class="card-header">
+                <h2 class="card-title">Intelligence Dashboard</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-number" id="totalThreats">4,823</span>
+                    <div class="stat-label">Total Threats</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="activeSources">12</span>
+                    <div class="stat-label">Active Sources</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="correlations">156</span>
+                    <div class="stat-label">Correlations Found</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="riskScore">87</span>
+                    <div class="stat-label">Risk Score</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ThreatIntelAggregator {
+            constructor() {
+                this.threats = [];
+                this.sources = [];
+                this.correlations = [];
+                this.init();
+            }
+
+            init() {
+                this.generateSampleData();
+                this.renderThreats();
+                this.renderCorrelationMatrix();
+                this.startRealTimeUpdates();
+            }
+
+            generateSampleData() {
+                const threatTypes = [
+                    'Malware Campaign', 'Phishing Attack', 'Data Breach', 'DDoS Attack', 
+                    'APT Activity', 'Ransomware', 'Botnet Activity', 'Zero-day Exploit'
+                ];
+                
+                const severityLevels = ['critical', 'high', 'medium', 'low'];
+                const sources = ['MISP', 'VirusTotal', 'OTX', 'Shodan', 'Custom Feed'];
+
+                // Generate sample threats
+                for (let i = 0; i < 15; i++) {
+                    this.threats.push({
+                        id: i + 1,
+                        title: threatTypes[Math.floor(Math.random() * threatTypes.length)],
+                        severity: severityLevels[Math.floor(Math.random() * severityLevels.length)],
+                        source: sources[Math.floor(Math.random() * sources.length)],
+                        timestamp: new Date(Date.now() - Math.random() * 86400000).toLocaleTimeString(),
+                        iocs: Math.floor(Math.random() * 50) + 1,
+                        confidence: Math.floor(Math.random() * 40) + 60
+                    });
+                }
+
+                // Generate correlation data
+                const correlationTypes = ['IP Address', 'File Hash', 'Domain', 'URL', 'Email', 'Certificate'];
+                for (let i = 0; i < 16; i++) {
+                    const strength = Math.random();
+                    let level = 'low';
+                    if (strength > 0.7) level = 'high';
+                    else if (strength > 0.4) level = 'medium';
+                    
+                    this.correlations.push({
+                        type: correlationTypes[Math.floor(Math.random() * correlationTypes.length)],
+                        level: level,
+                        count: Math.floor(Math.random() * 10) + 1
+                    });
+                }
+            }
+
+            renderThreats() {
+                const threatList = document.getElementById('threatList');
+                threatList.innerHTML = '';
+
+                this.threats.slice(0, 8).forEach(threat => {
+                    const threatElement = document.createElement('div');
+                    threatElement.className = `threat-item threat-${threat.severity}`;
+                    threatElement.innerHTML = `
+                        <div class="threat-title">${threat.title}</div>
+                        <div class="threat-meta">
+                            <span>${threat.source} • ${threat.iocs} IOCs</span>
+                            <span>${threat.timestamp}</span>
+                        </div>
+                    `;
+                    threatList.appendChild(threatElement);
+                });
+            }
+
+            renderCorrelationMatrix() {
+                const matrix = document.getElementById('correlationMatrix');
+                matrix.innerHTML = '';
+
+                this.correlations.slice(0, 12).forEach(corr => {
+                    const cell = document.createElement('div');
+                    cell.className = `correlation-cell correlation-${corr.level}`;
+                    cell.innerHTML = `
+                        <div>${corr.type}</div>
+                        <div>${corr.count}</div>
+                    `;
+                    matrix.appendChild(cell);
+                });
+            }
+
+            updateStats() {
+                const stats = {
+                    totalThreats: Math.floor(Math.random() * 1000) + 4000,
+                    activeSources: Math.floor(Math.random() * 5) + 10,
+                    correlations: Math.floor(Math.random() * 50) + 130,
+                    riskScore: Math.floor(Math.random() * 20) + 75
+                };
+
+                Object.keys(stats).forEach(key => {
+                    const element = document.getElementById(key);
+                    if (element) {
+                        this.animateCounter(element, parseInt(element.textContent), stats[key]);
+                    }
+                });
+            }
+
+            animateCounter(element, start, end) {
+                const duration = 1000;
+                const increment = (end - start) / (duration / 16);
+                let current = start;
+
+                const timer = setInterval(() => {
+                    current += increment;
+                    if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                        current = end;
+                        clearInterval(timer);
+                    }
+                    element.textContent = Math.floor(current).toLocaleString();
+                }, 16);
+            }
+
+            startRealTimeUpdates() {
+                // Simulate real-time updates
+                setInterval(() => {
+                    this.updateStats();
+                    
+                    // Occasionally add new threats
+                    if (Math.random() > 0.7) {
+                        this.addNewThreat();
+                    }
+                }, 5000);
+
+                // Update correlations less frequently
+                setInterval(() => {
+                    this.generateSampleData();
+                    this.renderCorrelationMatrix();
+                }, 15000);
+            }
+
+            addNewThreat() {
+                const newThreat = {
+                    id: this.threats.length + 1,
+                    title: 'New Threat Detected',
+                    severity: ['critical', 'high'][Math.floor(Math.random() * 2)],
+                    source: 'Live Feed',
+                    timestamp: new Date().toLocaleTimeString(),
+                    iocs: Math.floor(Math.random() * 20) + 1,
+                    confidence: Math.floor(Math.random() * 30) + 70
+                };
+
+                this.threats.unshift(newThreat);
+                this.renderThreats();
+            }
+        }
+
+        // Global functions for button interactions
+        function refreshSources() {
+            showNotification('Refreshing data sources...', 'info');
+            setTimeout(() => {
+                showNotification('All sources updated successfully', 'success');
+            }, 2000);
+        }
+
+        function addSource() {
+            const sourceName = prompt('Enter new source name:');
+            if (sourceName) {
+                showNotification(`Added source: ${sourceName}`, 'success');
+            }
+        }
+
+        function refreshThreats() {
+            showNotification('Refreshing threat intelligence...', 'info');
+            aggregator.generateSampleData();
+            aggregator.renderThreats();
+            setTimeout(() => {
+                showNotification('Threats updated', 'success');
+            }, 1500);
+        }
+
+        function exportThreats() {
+            showNotification('Exporting threat data...', 'info');
+            // Simulate export
+            setTimeout(() => {
+                showNotification('Export completed', 'success');
+            }, 2000);
+        }
+
+        function runCorrelation() {
+            showNotification('Running correlation analysis...', 'info');
+            setTimeout(() => {
+                aggregator.generateSampleData();
+                aggregator.renderCorrelationMatrix();
+                showNotification('Correlation analysis complete', 'success');
+            }, 3000);
+        }
+
+        function viewCorrelations() {
+            showNotification('Opening correlation details...', 'info');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                background: ${type === 'success' ? '#4ecdc4' : type === 'info' ? '#45b7d1' : '#ff6b6b'};
+                color: white;
+                border-radius: 8px;
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize the aggregator
+        const aggregator = new ThreatIntelAggregator();
+    </script>
+</body>
+</html>
